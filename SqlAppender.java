@@ -180,6 +180,10 @@ public class SqlAppender {
         final Map<String, Object> columnToAlias = new HashMap<>(columns.length);
         for (String cln : columns) {
             ColumnEntry ce = getColumnEntry(cln);
+            if(ce.voColumn == null){
+                log.error("view column name can not be parsed ，vo name {}, original column name {}  " ,ce.voColumn,ce.originalColumn);
+                throw new RuntimeException("view column name can not be parsed "+ ce.originalColumn);
+            }
             columnToAlias.put(ce.voColumn, ce.originalColumn);
             resultColumns.add(ce.voColumn);
         }
@@ -258,7 +262,10 @@ public class SqlAppender {
 
 
     private static ColumnEntry getColumnEntry(String s) {
+        s = s.trim();
+        s = s.replaceAll("(\\n|\\t) ","");
         if (s.indexOf("as") != -1) {
+            //format may look like this: a.column  as xxx
             String[] ss = s.split("as");
             ColumnEntry ce = new ColumnEntry();
             ce.originalColumn = ss[0].trim();
@@ -267,9 +274,43 @@ public class SqlAppender {
         }
 
         int start = s.indexOf(ALIAS_PREFFIX);
+        if(start == -1){
+            String[] ogClAndAlias = s.trim().split(" ");
+            if(ogClAndAlias.length > 1){
+                //format may look like this: a.column  xxx
+                ColumnEntry ce = new ColumnEntry();
+                ce.originalColumn = ogClAndAlias[0].trim();
+                ce.voColumn = ogClAndAlias[1].trim();
+                return ce;
+            }else{
+                //format may look like this: a.column
+                //convert ab_cd to abCd format
+                ColumnEntry ce = new ColumnEntry();
+                String orgCln = s.substring(s.indexOf(".")+1);
+                int indexOf_ = orgCln.indexOf("_");
+                if(indexOf_ == -1){
+                    ce.originalColumn = orgCln;
+                    ce.voColumn = orgCln;
+                }else{
+                    String[] ss = orgCln.split("_");
+                    StringBuilder cln = new StringBuilder();
+                    //
+                    for(int i = 0 ; i < ss.length ; i++){
+                        if(i == 0){
+                            cln.append(ss[i]);
+                            continue;
+                        }
+                        cln.append(ss[i].substring(0,1).toUpperCase()+ss[i].substring(1));
+                    }
+                    ce.voColumn = cln.toString();
+                    ce.originalColumn = orgCln;
+                }
+                return ce;
+            }
+        }
         String pres = s.substring(0, start);
-
         String[] ogClAndAlias = pres.trim().split(" ");
+
 
         if (ogClAndAlias.length > 1) {
             //column and alias
